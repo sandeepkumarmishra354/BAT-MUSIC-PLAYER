@@ -1,30 +1,27 @@
 #main_con {
-             background-image:url(:player/icons/dark-path.jpg);
-             background-position:right
+             background-image:url(:player/icons/bat-bg3.jpg);
+             background-position:right;
           }
-#song_slider::handle:horizontal { background-color:#ff1744;border-radius:6px }
-#song_slider::handle:horizontal:hover { background-color:blue }
-#song_slider::sub-page:horizontal { background:#fb8c00 }
-#curr_dur { color:#e65100 }
-#tot_dur { color:#e65100 }
-#status_bar { background-color:#e65100 }
-#v_scrollbar { background-color:#e65100 }
-#v_scrollbar::handle:vertical { background:#fb8c00;width:10px;border-radius:7px }
-#v_scrollbar::handle:vertical:hover { background:white }
-#v_scrollbar::add-line:vertical { background:#fb8c00;border-radius:6px; }
-#v_scrollbar::add-line:vertical:hover { background:white }
-#v_scrollbar::sub-line:vertical { background:#fb8c00;border-radius:6px }
-#v_scrollbar::sub-line:vertical:hover { background:white }
-#play_lbl { color:#e65100; font-weight:bold }
-#song_tbl::item:hover { color:white;background-color:#fb8c00;border-radius:12px }
-#song_tbl { color:white }
+#main_con QPushButton:hover { background-color:#1f1f47;border-radius:35%; }
+#song_slider::handle:horizontal { background-color:#08085e;border-radius:7px; }
+#song_slider::handle:horizontal:hover { background-color:blue; }
+#song_slider::sub-page:horizontal { background:#8080ff; }
+#curr_dur { color:#1f1f47; }
+#tot_dur { color:#1f1f47; }
+#status_bar { background-color:#1f1f47;color:white; }
+#v_scrollbar { background-color:#1f1f47; }
+#v_scrollbar::handle:vertical { background:#8080ff;width:10px;border-radius:7px; }
+#v_scrollbar::add-line:vertical { background:#8080ff;border-radius:6px; }
+#v_scrollbar::sub-line:vertical { background:#8080ff;border-radius:6px; }
+#play_lbl { color:#1f1f47; font-weight:bold; }
+#song_tbl::item:hover { color:white;background-color:#303036;border-radius:12px; }
+#song_tbl { color:white; }
 #song_tbl {
-             background-image:url(:player/icons/music_bg.jpg);
-             background-position:center;
-             background-attachment: fixed
+             background-image:url(:player/icons/bat-bg3.jpg);
+             background-position:right;
+             background-attachment: fixed;
           }
-#tool_con QPushButton:hover { background-color:#e65100 }
-#playing_lbl { font-weight:bold }
-#playing_lbl:hover { color:white }
-#tot_lbl { font-weight:bold }
-#tot_lbl:hover { color:white }
+#tool_con QPushButton:hover { background-color:#8080ff; }
+#tool_con QLineEdit:hover { background-color:#8080ff; }
+#playing_lbl { color:white; }
+#tot_lbl { color:white; }
