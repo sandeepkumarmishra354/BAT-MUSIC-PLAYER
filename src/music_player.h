@@ -1,6 +1,5 @@
 #ifndef MUSIC_PLAYER_H
 #define MUSIC_PLAYER_H
-#define NO_CHANGE -1
 #define YES true
 #define NO false
 
@@ -9,6 +8,7 @@
 #include <QtMultimedia/QMediaPlaylist>
 #include <QMediaContent>
 #include <QMediaResource>
+#include <QMediaMetaData>
 #include <QPushButton>
 #include <QLabel>
 #include <QVBoxLayout>
@@ -30,6 +30,15 @@
 #include <QBrush>
 #include <QList>
 #include <QMap>
+#include <QGraphicsOpacityEffect>
+#include <QLineEdit>
+#include <QKeyEvent>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QJsonParseError>
+#include <QJsonValue>
+#include "media_info.h"
 
 class Music_Player : public QMainWindow
 {
@@ -49,7 +58,9 @@ class Music_Player : public QMainWindow
         QToolBar *tool_bar;
         QMenu *player_menu, *about_menu, *playlist_menu;
         QMenu *playlist_sub_menu, *add_to_sub_menu;
+        QMenu *remove_playlist_sub_menu;
         QAction *main_playlist_action;
+        QAction *allSongs;
         QMenu *context_menu;
         QAction *create_new_playlist, *add_to_queue;
         QAction *remove_song, *delete_song;
@@ -59,15 +70,20 @@ class Music_Player : public QMainWindow
         QLabel *total_song_lbl, *current_playing_lbl;
         QPushButton *play_pause_btn, *next_btn, *prev_btn, *info_btn;
         QPushButton *repeat_btn, *shuffle_btn, *vol_icon_btn;
+        QAction *addMoreFolder;
+        QLineEdit *search_bar;
+        QAction *search_icon;
 
         QMap <QString, QAction*> playlist_action_container;
         QMap <QString, QAction*> addto_action_container;
+        QMap <QString, QAction*> remove_action_container;
         QMap <QString, QMediaPlaylist*> playlist_container;
         QVector <int> song_queue;
         bool first_queue = true;
 
+        QGraphicsOpacityEffect *fade_effect;
+
         QStringList all_songs;
-        QMediaResource media_resource;
         bool any_changes, first_tym = true;
         QTableWidgetItem *prev_item;
         QBrush fg_brush, bg_brush;
@@ -75,8 +91,11 @@ class Music_Player : public QMainWindow
         bool repeat_all, repeat_current, no_repeat, refresh, from_refresh;
         bool force_quit, no_folder_selected, is_mute, is_shuffle;
         bool auto_changed, by_next, by_prev, already;
-        QString pl_path, info;
-        short cur_volume, total_songs;
+        QString pl_path;
+        short cur_volume, total_songs, totalRow = 0;
+
+        Media_info *mediaInfo = nullptr;
+        //QMediaResource mr;
 
         void create_action_and_control();
         void load_music();
@@ -89,15 +108,6 @@ class Music_Player : public QMainWindow
         void LoadPlaylist(QString);
         void savePlaylistToFile(const QString& pl_name, const QString& s_name);
         void readPlaylistFromFile();
-        void generate_media_info();
-
-        struct settings
-        {
-            QString playlist_path;
-            short volume = NO_CHANGE;
-            short duration = NO_CHANGE;
-            int row_no = NO_CHANGE;
-        }all_settings;
 
         enum class REPEAT
         {
@@ -110,7 +120,11 @@ class Music_Player : public QMainWindow
 
         Music_Player(QWidget *parent = 0);
         ~Music_Player();
+
+   protected:
+
         void closeEvent(QCloseEvent *);
+        void keyPressEvent(QKeyEvent *);
 
    private slots:
 
@@ -130,6 +144,10 @@ class Music_Player : public QMainWindow
         void remove_();
         void delete_();
         void show_song_info();
+        void loadAllSongs();
+        void addFolder();
+        void search(const QString& textToSearch);
+        void metaInfo(bool);
         void set_volume(int);
         void forwarded(int);
         void total_dur(qint64);
@@ -139,6 +157,7 @@ class Music_Player : public QMainWindow
         void show_context_menu(QPoint);
         void AddTo(QAction*);
         void OpenPlaylist(QAction*);
+        void removePlaylist(QAction*);
 
 };
 #endif // MUSIC_PLAYER_H
