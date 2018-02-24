@@ -8,7 +8,7 @@ Qt_5.6 or newer version must be installed in your target system before compiling
 open terminal and `cd projectdir` directory and execute-
         `qmake -project -o filename.pro`
         
-# After this open filename.pro and insert this at the begining of file-
+# After this open filename.pro and insert this at begining of file-
         QT       += core gui
         QT += multimedia multimediawidgets
         
