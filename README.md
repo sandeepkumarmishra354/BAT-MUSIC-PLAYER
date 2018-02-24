@@ -16,5 +16,6 @@ open terminal and `cd projectdir` directory and execute-
         qmake filename.pro
         make
         
-# Now you can see executed file run this
-        ./file
+# WOW !!! you got an executable file
+run this file
+        `./file`
