@@ -25,12 +25,14 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 
 SOURCES += \
-        main.cpp \
-        music_player.cpp \
+        src/main.cpp \
+        src/music_player.cpp \
+        src/media_info.cpp
 
 HEADERS += \
-        music_player.h \
-    music_player.h
+        src/music_player.h \
+    src/music_player.h \
+    src/media_info.h
 
 CONFIG += mobility
 MOBILITY = 
