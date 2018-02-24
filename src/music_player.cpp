@@ -17,16 +17,19 @@
 #include <QInputDialog>
 #include <QFont>
 #include <QObject>
+#include <QPropertyAnimation>
 
 Music_Player::Music_Player(QWidget *parent):QMainWindow(parent)
 {
-    bg_color.setNamedColor("#e65100");
+    bg_color.setNamedColor("#8080ff");
     txt_clr.setNamedColor("white");
 
     player_menu = menuBar()->addMenu(tr("&BAT-PLAYER"));
     playlist_menu = menuBar()->addMenu(tr("&Playlist"));
-    playlist_sub_menu = playlist_menu->addMenu("Your Playlist");
+    playlist_sub_menu = playlist_menu->addMenu("Open Playlist");
     connect(playlist_sub_menu, SIGNAL(triggered(QAction*)), this, SLOT(OpenPlaylist(QAction*)));
+    remove_playlist_sub_menu = playlist_menu->addMenu("Remove Playlist");
+    connect(remove_playlist_sub_menu, SIGNAL(triggered(QAction*)), this, SLOT(removePlaylist(QAction*)));
     about_menu = menuBar()->addMenu(tr("&About"));
     tool_bar = addToolBar(tr("tool bar"));
     status_bar = statusBar();
@@ -55,6 +58,7 @@ Music_Player::Music_Player(QWidget *parent):QMainWindow(parent)
     currrent_play_lbl = new QLabel("BAT-MUSIC-PLAYER");
 
     song_player = new QMediaPlayer;
+    connect(song_player, SIGNAL(metaDataAvailableChanged(bool)), this, SLOT(metaInfo(bool)));
     connect(song_player, SIGNAL(durationChanged(qint64)), this, SLOT(total_dur(qint64)));
     connect(song_player, SIGNAL(positionChanged(qint64)), this, SLOT(current_dur(qint64)));
     connect(song_player, SIGNAL(currentMediaChanged(QMediaContent)), this, SLOT(set_song_name(QMediaContent)));
@@ -69,8 +73,7 @@ Music_Player::Music_Player(QWidget *parent):QMainWindow(parent)
     song_table->setShowGrid(false);
     song_table->setContextMenuPolicy(Qt::CustomContextMenu);
     song_table->setSelectionBehavior(QAbstractItemView::SelectRows);
-    song_table->setSelectionMode(QAbstractItemView::SingleSelection);
-    //song_table->setSelectionMode(QAbstractItemView::MultiSelection);
+    song_table->setSelectionMode(QAbstractItemView::ExtendedSelection);
     connect(song_table, SIGNAL(cellClicked(int,int)), this, SLOT(set_focus()));
     connect(song_table, SIGNAL(itemDoubleClicked(QTableWidgetItem*)), this, SLOT(song_clicked(QTableWidgetItem*)));
     connect(song_table, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(show_context_menu(QPoint)));
@@ -79,6 +82,8 @@ Music_Player::Music_Player(QWidget *parent):QMainWindow(parent)
     current_playing_lbl = new QLabel;
     status_bar->addPermanentWidget(current_playing_lbl);
     status_bar->addPermanentWidget(total_song_lbl);
+
+    mediaInfo = new Media_info(this);
 
     // set flags initial state
     repeat_all = repeat_current = no_repeat = false;
@@ -99,19 +104,31 @@ Music_Player::Music_Player(QWidget *parent):QMainWindow(parent)
     set_style();
     load_music();
 
-    playlist_container.insert("Main Playlist", main_playlist);
+    playlist_container.insert("All Songs", main_playlist);
 
     setWindowIcon(QIcon(":player/icons/Bat_player.ico"));
     setMinimumWidth(800);
     setMinimumHeight(650);
     setWindowTitle("BAT-MUSIC-PLAYER");
     showMaximized();
+    setFocus();
+
+    fade_effect = new QGraphicsOpacityEffect(this);
+    setGraphicsEffect(fade_effect);
+    QPropertyAnimation *animation = new QPropertyAnimation(fade_effect, "opacity");
+    animation->setEasingCurve(QEasingCurve::InOutQuad);
+    animation->setDuration(3000);
+    animation->setStartValue(0.001);
+    animation->setEndValue(1.0);
+    animation->start(QPropertyAnimation::DeleteWhenStopped);
+    setVisible(true);
 }
 
 void Music_Player::create_context_menu()
 {
     context_menu = new QMenu(this);
-    create_new_playlist = new QAction("New Playlist");
+    context_menu->setStyleSheet("background-color:#8080ff");
+    create_new_playlist = new QAction("Create New Playlist");
     connect(create_new_playlist, SIGNAL(triggered()), this, SLOT(NewPlaylist()));
     context_menu->addAction(create_new_playlist);
 
@@ -121,6 +138,7 @@ void Music_Player::create_context_menu()
     add_to_queue = new QAction("Add to Queue");
     context_menu->addAction(add_to_queue);
     connect(add_to_queue, SIGNAL(triggered()), this, SLOT(add_queue()));
+    add_to_queue->setDisabled(true);
 
     remove_song = new QAction("Remove");
     remove_song->setToolTip("Remove song from current playlist");
@@ -129,9 +147,17 @@ void Music_Player::create_context_menu()
 
     delete_song = new QAction("Delete");
     delete_song->setToolTip("Delete song from disk storage");
-    delete_song->setIcon(QIcon(":player/icons/Delete.png"));
     connect(delete_song, SIGNAL(triggered()), this, SLOT(delete_()));
     context_menu->addAction(delete_song);
+}
+
+void Music_Player::metaInfo(bool status)
+{
+    if(status)
+    {
+        QString Artist = song_player->metaData(QMediaMetaData::AlbumArtist).toString();
+        mediaInfo->artistName(Artist);
+    }
 }
 
 void Music_Player::remove_()
@@ -147,24 +173,32 @@ void Music_Player::remove_()
             total_songs--;
             total_song_lbl->setText("Total Song "+QString::number(total_songs));
         }
+        status_bar->showMessage("removed...",4000);
     }
 }
 
 void Music_Player::delete_()
 {
-    QList<QTableWidgetItem*> list;
-    list = song_table->selectedItems();
-    if(!list.isEmpty())
+    int option;
+    option = QMessageBox::warning(this, "Delete Permanantly", "Are you sure ?",
+                                  QMessageBox::Ok, QMessageBox::Cancel);
+    if(option == QMessageBox::Ok)
     {
-        foreach(QTableWidgetItem *itm, list)
+        QList<QTableWidgetItem*> list;
+        list = song_table->selectedItems();
+        if(!list.isEmpty())
         {
-            QString file = pl_path + "/" + itm->text();
-            song_player->playlist()->removeMedia(itm->row());
-            song_table->removeRow(itm->row());
-            QFile rm_file(file);
-            rm_file.remove();
-            total_songs--;
-            total_song_lbl->setText("Total Song "+QString::number(total_songs));
+            foreach(QTableWidgetItem *itm, list)
+            {
+                QString file = pl_path + "/" + itm->text();
+                song_player->playlist()->removeMedia(itm->row());
+                song_table->removeRow(itm->row());
+                QFile rm_file(file);
+                rm_file.remove();
+                total_songs--;
+                total_song_lbl->setText("Total Song "+QString::number(total_songs));
+            }
+            status_bar->showMessage("deleted...",4000);
         }
     }
 }
@@ -217,31 +251,38 @@ void Music_Player::NewPlaylist()
             QMediaPlaylist *new_playlist = new QMediaPlaylist;
             QAction *playlist_action;
             QAction *addto_action;
-            QString path = pl_path + "/";
+            QAction *remove_action;
+            //QString path = pl_path + "/";
             QList < QTableWidgetItem * > SelectedItems;
             SelectedItems = song_table->selectedItems();
             if(!SelectedItems.isEmpty())
             {
+                QMediaPlaylist *pl = song_player->playlist();
                 foreach (QTableWidgetItem *itm, SelectedItems)
                 {
-                    QString file_path = path + itm->text();
-                    new_playlist->addMedia(QUrl::fromLocalFile(file_path));
-                    savePlaylistToFile(PlayListName, itm->text());
-                    //status_bar->showMessage("Added", 3000);
+                    QString songWithPath = pl->media(itm->row()).canonicalUrl().path();
+                    //QString songTitle = pl->media(itm->row()).canonicalUrl().fileName();
+                    new_playlist->addMedia(QUrl::fromLocalFile(songWithPath));
+                    savePlaylistToFile(PlayListName, songWithPath);
                 }
 
                 playlist_action = new QAction(PlayListName);
                 addto_action = new QAction(PlayListName);
+                remove_action = new QAction(PlayListName);
                 // store in in Key, Value pair
                 playlist_action_container.insert(PlayListName, playlist_action);
+                remove_action_container.insert(PlayListName, remove_action);
                 addto_action_container.insert(PlayListName, addto_action);
                 playlist_container.insert(PlayListName, new_playlist);
 
                 playlist_sub_menu->addAction(playlist_action_container[PlayListName]);
+                remove_playlist_sub_menu->addAction(remove_action_container[PlayListName]);
                 add_to_sub_menu->addAction(addto_action_container[PlayListName]);
 
                 playlist_action = nullptr;
                 new_playlist = nullptr;
+                remove_action = nullptr;
+                status_bar->showMessage("done...",4000);
             }
         }
     }
@@ -272,6 +313,7 @@ void Music_Player::LoadPlaylist(QString PlaylistName)
     song_player->setPlaylist(playlist);
     current_playing_lbl->setText("Song No. 1,");
     total_song_lbl->setText("Total Song "+QString::number(total_songs));
+    status_bar->showMessage("loaded...",4000);
 }
 
 void Music_Player::AddTo(QAction *action)
@@ -282,14 +324,16 @@ void Music_Player::AddTo(QAction *action)
     SelectedItems = song_table->selectedItems();
     if(!SelectedItems.isEmpty())
     {
+        QMediaPlaylist *t_p = song_player->playlist();
+        QMediaContent con;
         foreach(QTableWidgetItem *itm, SelectedItems)
         {
-            QString file_name;
-            file_name = pl_path + "/" + itm->text();
+            con = t_p->media(itm->row());
+            QString file_name = con.canonicalUrl().path();
             playlist->addMedia(QUrl::fromLocalFile(file_name));
-            savePlaylistToFile(action->text(), itm->text());
-            status_bar->showMessage("Added", 3000);
+            savePlaylistToFile(action->text(), file_name);
         }
+        status_bar->showMessage("Added...", 3000);
     }
 }
 
@@ -297,6 +341,32 @@ void Music_Player::OpenPlaylist(QAction *action)
 {
     QString PlaylistName = action->text();
     LoadPlaylist(PlaylistName);
+}
+
+void Music_Player::removePlaylist(QAction *action)
+{
+    QString PlaylistName = action->text();
+    QMediaPlaylist *curPlylist = song_player->playlist();
+    QMediaPlaylist *plylistToRemove = playlist_container[PlaylistName];
+    if(curPlylist == plylistToRemove)
+        LoadPlaylist("All Songs");// loads main playlist
+
+    delete playlist_container[PlaylistName];
+    delete addto_action_container[PlaylistName];
+    delete remove_action_container[PlaylistName];
+    delete playlist_action_container[PlaylistName];
+
+    playlist_container.remove(PlaylistName);
+    addto_action_container.remove(PlaylistName);
+    remove_action_container.remove(PlaylistName);
+    playlist_action_container.remove(PlaylistName);
+
+    QFile file(PlaylistName+".pl");
+    if(file.exists())
+    {
+        if(file.remove())
+            status_bar->showMessage("Playlist Removed...",4000);
+    }
 }
 
 void Music_Player::set_focus()
@@ -329,6 +399,7 @@ void Music_Player::set_music_layout()
     mDetail_Hlayout->addWidget(song_progress);
     mDetail_Hlayout->addWidget(TOTAL_DUR);
     mDetail_Hlayout->addWidget(info_btn);
+    mDetail_Hlayout->addWidget(search_bar);
 
     mDetail_Vlayout->addLayout(mDetail_Hlayout);
     mDetail_Vlayout->addWidget(currrent_play_lbl);
@@ -413,12 +484,23 @@ void Music_Player::set_song_name(QMediaContent con)
     currrent_play_lbl->setText(con.canonicalUrl().fileName());
     QString pl_no = "Song No. " + QString::number(main_playlist->currentIndex() + 1) + " ,";
     current_playing_lbl->setText(pl_no);
-    media_resource = con.canonicalResource();
-    generate_media_info();
+    mediaInfo->currentMedia(con.canonicalResource());
 }
 
 void Music_Player::create_action_and_control()
 {
+    allSongs = new QAction("All Songs");
+    allSongs->setShortcut(tr("CTRL+L"));
+    allSongs->setIcon(QIcon(":player/icons/all-songs.png"));
+    connect(allSongs, SIGNAL(triggered()), this, SLOT(loadAllSongs()));
+    player_menu->addAction(allSongs);
+
+    addMoreFolder = new QAction("Add folder");
+    addMoreFolder->setIcon(QIcon(":player/icons/add_folder.png"));
+    addMoreFolder->setShortcut(tr("CTRL+F"));
+    connect(addMoreFolder, SIGNAL(triggered()), this, SLOT(addFolder()));
+    player_menu->addAction(addMoreFolder);
+
     refresh_action = new QAction("Refresh");
     refresh_action->setIcon(QIcon(":player/icons/refresh.png"));
     refresh_action->setShortcut(tr("CTRL+R"));
@@ -430,9 +512,6 @@ void Music_Player::create_action_and_control()
     exit_action->setShortcut(QKeySequence::Close);
     connect(exit_action, SIGNAL(triggered()), this, SLOT(exit_slot()));
     player_menu->addAction(exit_action);
-
-    main_playlist_action = new QAction("Main Playlist");
-    playlist_sub_menu->addAction(main_playlist_action);
 
     about_bat_player = new QAction("About");
     connect(about_bat_player, SIGNAL(triggered()), this, SLOT(about_player()));
@@ -485,41 +564,131 @@ void Music_Player::create_action_and_control()
     info_btn->setToolTip("Song info");
     info_btn->setCursor(QCursor(Qt::PointingHandCursor));
     connect(info_btn, SIGNAL(clicked()), this, SLOT(show_song_info()));
+
+    search_bar = new QLineEdit;
+    search_bar->setMaximumWidth(150);
+    search_bar->setToolTip("Search songs");
+    search_bar->setPlaceholderText("search");
+    connect(search_bar, SIGNAL(textChanged(QString)), this, SLOT(search(QString)));
+}
+
+void Music_Player::addFolder()
+{
+    QString selectedDir;
+    QDir dir;
+    QStringList songs, filter;
+    selectedDir = QFileDialog::getExistingDirectory(this, "select folder", "/root");
+    if(!selectedDir.isEmpty())
+    {
+        filter<<"*.mp3"<<"*.MP3"<<"*.3gpp"<<"*.pcm"<<"*.PCM"
+              <<"*.3GPP"<<"*.m4a"<<"*.M4A"<<"*.wav"<<"*.WAV"
+              <<"*.aiff"<<"*.AIFF"<<"*.aac"<<"*.AAC"<<"*.ogg"
+              <<"*.OGG"<<"*.wma"<<"*.WMA";
+
+        dir.setPath(selectedDir);
+        songs = dir.entryList(filter, QDir::Files);
+        if(!songs.isEmpty())
+        {
+            QMediaPlaylist *mainPl;
+            mainPl = playlist_container["All Songs"];
+            int tot = mainPl->mediaCount();
+            bool flag = true;
+            foreach(QString itm, songs)
+            {
+                QString song_title = itm;
+                itm.prepend(selectedDir+"/");
+                for(int i=0; i<tot; ++i)
+                {
+                    QString f_s = mainPl->media(i).canonicalUrl().path();
+                    //qDebug()<<f_s;
+                    if(f_s == itm)
+                    {
+                        flag = false;
+                        break;
+                    }
+                }
+                if(flag)
+                {
+                    mainPl->addMedia(QUrl::fromLocalFile(itm));
+                    song_table->insertRow(song_table->rowCount());
+                    song_table->setItem(song_table->rowCount()-1,0,new QTableWidgetItem(song_title));
+                    status_bar->showMessage("added...",4000);
+                }
+                flag = true;
+            }
+            song_table->sortItems(Qt::AscendingOrder);
+            QString tot_no = "Total Song " + QString::number(song_table->rowCount());
+            total_song_lbl->setText(tot_no);
+        }
+
+        if(!songs.isEmpty())
+        {
+            QFile file(".main_playlist.set");
+            QString JSONstring;
+            if(file.open(QIODevice::ReadOnly))
+            {
+                JSONstring = file.readAll();
+                file.close();
+            }
+            if(file.open(QIODevice::WriteOnly))
+            {
+                bool folderAlready = false;
+                QJsonDocument jDoc = QJsonDocument::fromJson(JSONstring.toUtf8());
+                QJsonObject obj = jDoc.object();
+                QJsonArray jsArr = obj["folderPaths"].toArray();
+                foreach(auto itm, jsArr)
+                {
+                    if(itm.toString() == selectedDir)
+                    {
+                        qDebug()<<"ALREADY";
+                        folderAlready = true;
+                        break;
+                    }
+                }
+                if(!folderAlready)
+                {
+                    jsArr.append(QJsonValue(selectedDir));
+                    obj["folderPaths"] = jsArr;
+                    JSONstring = QJsonDocument(obj).toJson();
+                    QTextStream out(&file);
+                    out<<JSONstring;
+                }
+                else
+                {
+                    obj["folderPaths"] = jsArr;
+                    JSONstring = QJsonDocument(obj).toJson();
+                    QTextStream out(&file);
+                    out<<JSONstring;
+                }
+                file.close();
+            }
+        }
+    }
+}
+
+void Music_Player::loadAllSongs()
+{
+    OpenPlaylist(allSongs);
 }
 
 void Music_Player::show_song_info()
 {
-
-    QMessageBox::information(this, "information", info);
+    if(mediaInfo != nullptr)
+    {
+        mediaInfo->exec();
+    }
 }
 
-void Music_Player::generate_media_info()
+void Music_Player::search(const QString& textToSearch)
 {
-    QString codec = "Audio Codec: ";
-    QString bitrate = "Audio bit rate: ";
-    QString song_name = "Song: ";
-    QString path = "Path: ";
-    int bit_rate;
-    QString a_codec;
-
-    bit_rate = media_resource.audioBitRate();
-
-    if(bit_rate == 0)
-        bitrate += "NA";
-    else
-        bitrate += QString::number(bit_rate);
-
-    a_codec = media_resource.audioCodec();
-
-    if(a_codec.isNull())
-        codec += "NA";
-    else
-        codec += a_codec;
-
-    song_name += media_resource.url().fileName();
-    path += media_resource.url().path();
-
-    info = bitrate+"\n"+codec+"\n"+song_name+"\n"+path;
+    for(int i=0; i<song_table->rowCount(); ++i)
+        song_table->hideRow(i);
+    QList<QTableWidgetItem*> itms;
+    itms = song_table->findItems(textToSearch, Qt::MatchContains);
+    foreach(auto itm, itms)
+    {
+        song_table->showRow(itm->row());
+    }
 }
 
 void Music_Player::mute_unmute()
@@ -545,6 +714,8 @@ void Music_Player::about_player()
                                       "This program is developed using c/c++(Qt Framework)"
                                       "anyone can use this program according to him/her."
                                       "There is no copyright or anyother shit!!(i mean issue)"
+                                      "<br><a href='https://github.com/sandeepkumarmishra354/BAT-MUSIC-PLAYER'>"
+                                      "Source</a>"
                                       "<br><br><br>"
                                       "<b>Happy Music</b>(A Batman Fan)");
 }
@@ -573,7 +744,7 @@ void Music_Player::refresh_library()
         load_music();
     }
 
-    status_bar->showMessage("Refreshed", 4000);
+    status_bar->showMessage("Refreshed...", 4000);
 }
 
 void Music_Player::load_music()
@@ -697,11 +868,16 @@ void Music_Player::add_folder()
         QFile save_set(".main_playlist.set");
         if(save_set.open(QIODevice::WriteOnly))
         {
-            QDataStream out(&save_set);
-            all_settings.playlist_path = f_path;
-            out << all_settings.duration << all_settings.playlist_path
-                << all_settings.row_no << all_settings.volume;
-            save_set.flush();
+            QJsonObject rootObj;
+            QJsonArray dirPath;
+            dirPath.append(QJsonValue(f_path));
+            rootObj["folderPaths"] = dirPath;
+            rootObj["volume"] = 100;
+            rootObj["duration"] = 0;
+            rootObj["songNo"] = 0;
+            QString all_set = QJsonDocument(rootObj).toJson(QJsonDocument::Indented);
+            QTextStream out(&save_set);
+            out<<all_set;
             save_set.close();
         }
         QDir folder(f_path);
@@ -711,14 +887,14 @@ void Music_Player::add_folder()
         all_songs.clear();
         QStringList fltr;
         fltr<<"*.mp3"<<"*.MP3"<<"*.3gpp"<<"*.pcm"<<"*.PCM"
-           <<"*.3GPP"<<"*.m4a"<<"*.M4A"<<"*.wav"<<"*.WAV"
-           <<"*.aiff"<<"*.AIFF"<<"*.aac"<<"*.AAC"<<"*.ogg"
-           <<"*.OGG"<<"*.wma"<<"*.WMA";
+            <<"*.3GPP"<<"*.m4a"<<"*.M4A"<<"*.wav"<<"*.WAV"
+            <<"*.aiff"<<"*.AIFF"<<"*.aac"<<"*.AAC"<<"*.ogg"
+            <<"*.OGG"<<"*.wma"<<"*.WMA";
         all_songs = folder.entryList(fltr, QDir::Files);
-        for(int i=0; i<all_songs.length(); ++i)
+        totalRow = all_songs.length();
+        foreach(QString itm, all_songs)
         {
-            QString song_name = path + all_songs[i];
-            main_playlist->addMedia(QUrl::fromLocalFile(song_name));
+            main_playlist->addMedia(QUrl::fromLocalFile(path + itm));
         }
 
         song_player->setPlaylist(main_playlist);
@@ -744,7 +920,7 @@ void Music_Player::show_all_songs()
         song_table->setRowCount(0);
         song_table->setColumnCount(0);
     }
-    song_table->setRowCount(all_songs.length());
+    song_table->setRowCount(totalRow);
     song_table->setColumnCount(1);
     for(int i=0; i<all_songs.length(); i++)
     {
@@ -759,7 +935,7 @@ void Music_Player::show_all_songs()
             song_player->pause();
         //main_playlist->clear();
         QString s_path = pl_path + "/";
-        for(int i=0; i<all_songs.length(); i++)
+        for(int i=0; i<totalRow; i++)
             main_playlist->addMedia(QUrl::fromLocalFile(s_path+all_songs[i]));
 
         refresh = false;
@@ -780,7 +956,7 @@ void Music_Player::show_all_songs()
 
     enable_control(YES);
 
-    status_bar->showMessage("Playlist loaded...", 4000);
+    status_bar->showMessage("All Songs Loaded...", 4000);
     QString tot_no = "Total Song " + QString::number(all_songs.length());
     total_song_lbl->setText(tot_no);
     no_folder_selected = false;
@@ -803,6 +979,11 @@ void Music_Player::enable_control(bool flag)
         volume_progress->setEnabled(true);
         song_progress->setEnabled(true);
         refresh_action->setEnabled(true);
+        info_btn->setEnabled(true);
+        playlist_sub_menu->setEnabled(true);
+        remove_playlist_sub_menu->setEnabled(true);
+        search_bar->setEnabled(true);
+        allSongs->setEnabled(true);
     }
     else
     {
@@ -816,54 +997,62 @@ void Music_Player::enable_control(bool flag)
         volume_progress->setDisabled(true);
         song_progress->setDisabled(true);
         refresh_action->setDisabled(true);
+        info_btn->setDisabled(true);
+        playlist_sub_menu->setDisabled(true);
+        remove_playlist_sub_menu->setDisabled(true);
+        search_bar->setDisabled(true);
+        allSongs->setDisabled(true);
     }
 }
 
 void Music_Player::display_songs()
 {
+    QJsonObject rootObj;
     QFile read_path(".main_playlist.set");
     if(read_path.open(QIODevice::ReadOnly))
     {
-        QDataStream in(&read_path);
-        in >> all_settings.duration >> all_settings.playlist_path
-           >> all_settings.row_no >> all_settings.volume;
+        QTextStream in(&read_path);
+        QJsonParseError jErr;
+        QJsonDocument jDoc = QJsonDocument::fromJson(read_path.readAll(), &jErr);
         read_path.close();
+        rootObj = jDoc.object();
         all_songs.clear();
         main_playlist->clear();
-        pl_path = all_settings.playlist_path;
-        QDir dir(pl_path);
-
         QStringList fltr;
         fltr<<"*.mp3"<<"*.MP3"<<"*.3gpp"<<"*.pcm"<<"*.PCM"
-           <<"*.3GPP"<<"*.m4a"<<"*.M4A"<<"*.wav"<<"*.WAV"
-           <<"*.aiff"<<"*.AIFF"<<"*.aac"<<"*.AAC"<<"*.ogg"
-           <<"*.OGG"<<"*.wma"<<"*.WMA";
-        all_songs = dir.entryList(fltr, QDir::Files);
-        for(int i=0; i<all_songs.length(); ++i)
+            <<"*.3GPP"<<"*.m4a"<<"*.M4A"<<"*.wav"<<"*.WAV"
+            <<"*.aiff"<<"*.AIFF"<<"*.aac"<<"*.AAC"<<"*.ogg"
+            <<"*.OGG"<<"*.wma"<<"*.WMA";
+        QJsonArray jsArr = rootObj["folderPaths"].toArray();
+        QStringList tmpList;
+        foreach(auto itm, jsArr)
         {
-            QString ss = pl_path + "/" + all_songs[i];
-            main_playlist->addMedia(QUrl::fromLocalFile(ss));
+            pl_path = itm.toString();
+            QDir dir(pl_path);
+            tmpList = dir.entryList(fltr, QDir::Files);
+            totalRow += tmpList.length();
+            for(int i=0; i<tmpList.length(); ++i)
+            {
+                all_songs.append(tmpList[i]);
+                QString ss = pl_path + "/" + tmpList[i];
+                main_playlist->addMedia(QUrl::fromLocalFile(ss));
+            }
         }
     }
 
     song_player->setPlaylist(main_playlist);
     show_all_songs();
-
-    if(all_settings.duration <= NO_CHANGE)
-        all_settings.duration = 0;
-    if(all_settings.row_no <= NO_CHANGE)
-        all_settings.row_no = 0;
-    if(all_settings.volume <= NO_CHANGE)
-        all_settings.volume = 100;
-
     // restore previous settings
-    QTableWidgetItem *itm = song_table->item(all_settings.row_no, 0);
-    volume_progress->setValue(all_settings.volume);
+    int vol = rootObj["volume"].toInt();
+    int dur = rootObj["duration"].toInt();
+    int songRow = rootObj["songNo"].toInt();
+    QTableWidgetItem *itm = song_table->item(songRow, 0);
+    volume_progress->setValue(vol);
     //song_clicked(itm);
     main_playlist->setCurrentIndex(itm->row());
     itm->setBackgroundColor(bg_color);
     prev_item = itm;
-    forwarded(all_settings.duration);
+    forwarded(dur);
     no_folder_selected = false;
     any_changes = true;
 }
@@ -878,6 +1067,7 @@ void Music_Player::total_dur(qint64 dur)
 
     song_progress->setMaximum(total_sec);
     song_progress->setValue(0);
+    mediaInfo->totalDuration(TOTAL_DUR);
 }
 
 void Music_Player::current_dur(qint64 dur)
@@ -953,59 +1143,122 @@ void Music_Player::exit_slot()
     close();
 }
 
-void Music_Player::savePlaylistToFile(const QString& pl_name, const QString& s_name)
+void Music_Player::savePlaylistToFile(const QString& playlistName, const QString& songWithPath)
 {
-    QString playlist_name = pl_name + ".pl";
-    QFile file(playlist_name);
+    QString pl_file = playlistName + ".pl";
+    QFile file(pl_file);
+    QJsonDocument jDoc;
+    QJsonArray jArr;
+    QJsonObject obj;
     if(!file.exists())
     {
-        file.open(QIODevice::WriteOnly);
-        QTextStream out(&file);
-        out<<pl_name + "\n";
-        file.close();
+        qDebug()<<songWithPath;
+        //qDebug()<<"NOT";
+        jArr.append(QJsonValue(songWithPath));
+        obj["playlist_name"] = playlistName;
+        obj["songs"] = jArr;
+        QString JSONfile = QJsonDocument(obj).toJson(QJsonDocument::Indented);
+
+        if(file.open(QIODevice::WriteOnly))
+        {
+            QTextStream out(&file);
+            out<<JSONfile;
+            file.close();
+        }
     }
-    if(file.open(QIODevice::WriteOnly | QIODevice::Append))
+    else
     {
-        QTextStream out(&file);
-        out<<pl_path + "/" + s_name + "\n";
-        file.close();
+        qDebug()<<songWithPath;
+        QString JSONfile;
+        if(file.open(QIODevice::ReadOnly))
+        {
+            JSONfile = file.readAll();
+            file.close();
+        }
+        jDoc = QJsonDocument::fromJson(JSONfile.toUtf8());
+        obj = jDoc.object();
+        jArr = obj["songs"].toArray();
+        jArr.append(QJsonValue(songWithPath));
+        JSONfile = QJsonDocument(obj).toJson(QJsonDocument::Indented);
+        //qDebug()<<JSONfile;
+        if(file.open(QIODevice::WriteOnly))
+        {
+            QTextStream out(&file);
+            out<<JSONfile;
+            file.close();
+        }
     }
 }
 
 void Music_Player::readPlaylistFromFile()
 {
     QDir dir(".");
-    QStringList all_pl;
-    all_pl = dir.entryList(QStringList()<<"*.pl", QDir::Files);
+    QStringList allPlaylist;
+    QJsonDocument jDoc;
+    QJsonArray jArr;
+    QJsonObject obj;
+    allPlaylist = dir.entryList(QStringList()<<"*.pl", QDir::Files);
     // create actions
-    for(int i=0; i<all_pl.length(); ++i)
+    for(int i=0; i<allPlaylist.length(); ++i)
     {
-        QString pl_name;
-        QFile file(all_pl[i]);
+        QString playlistName;
+        QFile file(allPlaylist[i]);
         if(file.open(QIODevice::ReadOnly))
         {
-            QTextStream in(&file);
-            pl_name = in.readLine();
+            jDoc = QJsonDocument::fromJson(file.readAll());
+            file.close();
+            obj = jDoc.object();
+            playlistName = obj["playlist_name"].toString();
+            jArr = obj["songs"].toArray();
 
-            playlist_action_container.insert(pl_name, new QAction(pl_name));
-            addto_action_container.insert(pl_name, new QAction(pl_name));
+            playlist_action_container.insert(playlistName, new QAction(playlistName));
+            remove_action_container.insert(playlistName, new QAction(playlistName));
+            addto_action_container.insert(playlistName, new QAction(playlistName));
 
-            playlist_sub_menu->addAction(playlist_action_container[pl_name]);
-            add_to_sub_menu->addAction(addto_action_container[pl_name]);
+            playlist_sub_menu->addAction(playlist_action_container[playlistName]);
+            remove_playlist_sub_menu->addAction(remove_action_container[playlistName]);
+            add_to_sub_menu->addAction(addto_action_container[playlistName]);
 
             QMediaPlaylist *pl_list = new QMediaPlaylist;
-            playlist_container.insert(pl_name, pl_list);
+            playlist_container.insert(playlistName, pl_list);
 
-            while(!in.atEnd())
+            foreach(auto itm, jArr)
             {
-                QString song;
-                song = in.readLine();
-                pl_list->addMedia(QUrl::fromLocalFile(song));
+                QString song = itm.toString();
+                file.setFileName(song);
+                if(file.exists())
+                    pl_list->addMedia(QUrl::fromLocalFile(song));
             }
-
-            file.close();
         }
     }
+}
+
+void Music_Player::keyPressEvent(QKeyEvent *event)
+{
+    if(event->modifiers() == Qt::ControlModifier)
+    {
+        switch (event->key())
+        {
+            case Qt::Key_Left:
+                forwarded(song_progress->value()-7);
+                break;
+            case Qt::Key_Right:
+                forwarded(song_progress->value()+7);
+                break;
+            case Qt::Key_Up:
+                set_volume(volume_progress->value()+5);
+                volume_progress->setValue(volume_progress->value()+5);
+                break;
+            case Qt::Key_Down:
+                set_volume(volume_progress->value()-5);
+                volume_progress->setValue(volume_progress->value()-5);
+                break;
+        }
+    }
+    if(event->key() == Qt::Key_Escape)
+        exit_slot();
+    if(event->key() == Qt::Key_Space)
+        play_or_pause();
 }
 
 void Music_Player::closeEvent(QCloseEvent *event)
@@ -1016,18 +1269,28 @@ void Music_Player::closeEvent(QCloseEvent *event)
         {
             if(!no_folder_selected)
             {
-                all_settings.playlist_path = pl_path;
-                all_settings.duration = song_progress->value();
-                all_settings.volume = volume_progress->value();
-                all_settings.row_no = main_playlist->currentIndex();
-
-                QFile save_settings(".bat_player/settings/.main_playlist.set");
+                int dur = song_progress->value();
+                int vol = volume_progress->value();
+                int songRow = main_playlist->currentIndex();
+                QString f_value;
+                QFile save_settings(".main_playlist.set");
+                if(save_settings.open(QIODevice::ReadOnly))
+                {
+                    f_value = save_settings.readAll();
+                    save_settings.close();
+                }
                 if(save_settings.open(QIODevice::WriteOnly))
                 {
-                    QDataStream out(&save_settings);
-                    out << all_settings.duration << all_settings.playlist_path
-                        << all_settings.row_no << all_settings.volume;
-                    save_settings.flush();
+                    QJsonParseError jErr;
+                    QJsonDocument jDoc = QJsonDocument::fromJson(f_value.toUtf8(), &jErr);
+                    QJsonObject obj;
+                    obj = jDoc.object();
+                    obj["volume"] = vol;
+                    obj["duration"] = dur;
+                    obj["songNo"] = songRow;
+                    QString JSON = QJsonDocument(obj).toJson();
+                    QTextStream out(&save_settings);
+                    out<<JSON;
                     save_settings.close();
                 }
             }
@@ -1043,18 +1306,28 @@ void Music_Player::closeEvent(QCloseEvent *event)
     {
         if(!no_folder_selected)
         {
-            all_settings.playlist_path = pl_path;
-            all_settings.duration = song_progress->value();
-            all_settings.volume = volume_progress->value();
-            all_settings.row_no = main_playlist->currentIndex();
-
-            QFile save_settings(".bat_player/settings/.main_playlist.set");
+            int dur = song_progress->value();
+            int vol = volume_progress->value();
+            int songRow = main_playlist->currentIndex();
+            QString f_value;
+            QFile save_settings(".main_playlist.set");
+            if(save_settings.open(QIODevice::ReadOnly))
+            {
+                f_value = save_settings.readAll();
+                save_settings.close();
+            }
             if(save_settings.open(QIODevice::WriteOnly))
             {
-                QDataStream out(&save_settings);
-                out << all_settings.duration << all_settings.playlist_path
-                    << all_settings.row_no << all_settings.volume;
-                save_settings.flush();
+                QJsonParseError jErr;
+                QJsonDocument jDoc = QJsonDocument::fromJson(f_value.toUtf8(), &jErr);
+                QJsonObject obj;
+                obj = jDoc.object();
+                obj["volume"] = vol;
+                obj["duration"] = dur;
+                obj["songNo"] = songRow;
+                QString JSON = QJsonDocument(obj).toJson();
+                QTextStream out(&save_settings);
+                out<<JSON;
                 save_settings.close();
             }
         }
@@ -1068,17 +1341,18 @@ Music_Player::~Music_Player()
     delete playlist_menu;
     delete about_menu;
     delete context_menu;
+    delete allSongs;
     delete exit_action;
     delete refresh_action;
     delete tool_bar;
     delete status_bar;
     delete song_player;
-
     if(Vlayout1 != nullptr && add_folder_btn != nullptr)
         delete Vlayout1;
-
     delete main_container;
-    delete main_playlist_action;
     delete about_bat_player;
     delete about_qt;
+    if(mediaInfo != nullptr)
+        delete mediaInfo;
+    delete fade_effect;
 }
