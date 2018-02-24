@@ -10,7 +10,7 @@ open terminal and `cd projectdir` directory and execute-
 feel free to use any "filename"
         
 # After this open filename.pro and insert this at begining of file-
-        QT       += core gui
+        QT += core gui
         QT += multimedia multimediawidgets
         
 # Last step
