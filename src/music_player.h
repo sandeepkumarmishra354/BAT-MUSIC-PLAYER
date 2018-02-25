@@ -39,6 +39,7 @@
 #include <QJsonParseError>
 #include <QJsonValue>
 #include "media_info.h"
+#include "timer.h"
 
 class Music_Player : public QMainWindow
 {
@@ -72,14 +73,16 @@ class Music_Player : public QMainWindow
         QPushButton *repeat_btn, *shuffle_btn, *vol_icon_btn;
         QAction *addMoreFolder;
         QLineEdit *search_bar;
-        QAction *search_icon;
+        QAction *timerAction;
 
         QMap <QString, QAction*> playlist_action_container;
         QMap <QString, QAction*> addto_action_container;
         QMap <QString, QAction*> remove_action_container;
         QMap <QString, QMediaPlaylist*> playlist_container;
-        QVector <int> song_queue;
-        bool first_queue = true;
+        QList <int> song_queue;
+        short queueIndex = 0;
+        QStringList songToSave;
+        //bool first_queue = true;
 
         QGraphicsOpacityEffect *fade_effect;
 
@@ -90,11 +93,12 @@ class Music_Player : public QMainWindow
         QColor bg_color, txt_clr;
         bool repeat_all, repeat_current, no_repeat, refresh, from_refresh;
         bool force_quit, no_folder_selected, is_mute, is_shuffle;
-        bool auto_changed, by_next, by_prev, already;
+        bool auto_changed, by_next, by_prev, already, justNow = false;
         QString pl_path;
         short cur_volume, total_songs, totalRow = 0;
 
         Media_info *mediaInfo = nullptr;
+        Timer *timer;
         //QMediaResource mr;
 
         void create_action_and_control();
@@ -106,7 +110,7 @@ class Music_Player : public QMainWindow
         void create_context_menu();
         void enable_control(bool);
         void LoadPlaylist(QString);
-        void savePlaylistToFile(const QString& pl_name, const QString& s_name);
+        void savePlaylistToFile(const QString& pl_name, const QStringList& songList);
         void readPlaylistFromFile();
 
         enum class REPEAT
@@ -121,10 +125,15 @@ class Music_Player : public QMainWindow
         Music_Player(QWidget *parent = 0);
         ~Music_Player();
 
+   public slots:
+
+        void timeOut();
+
    protected:
 
         void closeEvent(QCloseEvent *);
         void keyPressEvent(QKeyEvent *);
+        void keyReleaseEvent(QKeyEvent *);
 
    private slots:
 
@@ -153,7 +162,9 @@ class Music_Player : public QMainWindow
         void total_dur(qint64);
         void current_dur(qint64);
         void set_song_name(QMediaContent);
+        //void setSongLabelByQueue(const QMediaContent& con) const;
         void song_clicked(QTableWidgetItem*);
+        void setTimeOut();
         void show_context_menu(QPoint);
         void AddTo(QAction*);
         void OpenPlaylist(QAction*);
