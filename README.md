@@ -9,7 +9,7 @@ open terminal and `cd projectdir` directory and execute (run this if you want to
         `qmake -project -o filename.pro`
 feel free to use any "filename"
         
-# After this open filename.pro and insert this at begining of file-
+# After this open filename.pro and insert this at begining of file(only when you created a new .pro file)-
         QT += core gui
         QT += multimedia multimediawidgets
         
