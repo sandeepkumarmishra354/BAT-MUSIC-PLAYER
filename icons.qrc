@@ -17,8 +17,11 @@
         <file>icons/shuffle_on.png</file>
         <file>icons/music_bg.jpg</file>
         <file>stylesheet/style.css</file>
-        <file>icons/dark-path.jpg</file>
         <file>icons/Delete.png</file>
         <file>icons/song-info.png</file>
+        <file>icons/bat-bg3.jpg</file>
+        <file>icons/search.png</file>
+        <file>icons/all-songs.png</file>
+        <file>icons/timer.png</file>
     </qresource>
 </RCC>
