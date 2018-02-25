@@ -84,6 +84,7 @@ Music_Player::Music_Player(QWidget *parent):QMainWindow(parent)
     status_bar->addPermanentWidget(total_song_lbl);
 
     mediaInfo = new Media_info(this);
+    timer = new Timer(this);
 
     // set flags initial state
     repeat_all = repeat_current = no_repeat = false;
@@ -205,17 +206,14 @@ void Music_Player::delete_()
 
 void Music_Player::add_queue()
 {
-    QList < QTableWidgetItem * > SelectedItems;
+    /*
+    QList <QTableWidgetItem*> SelectedItems;
     SelectedItems = song_table->selectedItems();
     foreach(QTableWidgetItem *itm, SelectedItems)
     {
         song_queue.append(itm->row());
-        if(first_queue)
-        {
-            static auto queue_itr = song_queue.begin();
-            first_queue = false;
-        }
     }
+    */
 }
 
 void Music_Player::show_context_menu(QPoint pos)
@@ -231,12 +229,12 @@ void Music_Player::NewPlaylist()
 
     if(ok && !PlayListName.isEmpty())
     {
-        QList<QString>keys = playlist_action_container.keys();
+        QList<QString>keys = playlist_container.keys();
         if(!playlist_action_container.isEmpty())
         {
             foreach(QString pl_name, keys)
             {
-                if(pl_name == PlayListName)
+                if(PlayListName == pl_name)
                 {
                     already = true;
                     QMessageBox::warning(this, "ERROR",
@@ -257,14 +255,17 @@ void Music_Player::NewPlaylist()
             SelectedItems = song_table->selectedItems();
             if(!SelectedItems.isEmpty())
             {
+                songToSave.clear();
                 QMediaPlaylist *pl = song_player->playlist();
                 foreach (QTableWidgetItem *itm, SelectedItems)
                 {
                     QString songWithPath = pl->media(itm->row()).canonicalUrl().path();
                     //QString songTitle = pl->media(itm->row()).canonicalUrl().fileName();
                     new_playlist->addMedia(QUrl::fromLocalFile(songWithPath));
-                    savePlaylistToFile(PlayListName, songWithPath);
+                    songToSave.append(songWithPath);
+                    //savePlaylistToFile(PlayListName, songWithPath);
                 }
+                savePlaylistToFile(PlayListName, songToSave);
 
                 playlist_action = new QAction(PlayListName);
                 addto_action = new QAction(PlayListName);
@@ -324,6 +325,7 @@ void Music_Player::AddTo(QAction *action)
     SelectedItems = song_table->selectedItems();
     if(!SelectedItems.isEmpty())
     {
+        songToSave.clear();
         QMediaPlaylist *t_p = song_player->playlist();
         QMediaContent con;
         foreach(QTableWidgetItem *itm, SelectedItems)
@@ -331,8 +333,9 @@ void Music_Player::AddTo(QAction *action)
             con = t_p->media(itm->row());
             QString file_name = con.canonicalUrl().path();
             playlist->addMedia(QUrl::fromLocalFile(file_name));
-            savePlaylistToFile(action->text(), file_name);
+            songToSave.append(file_name);
         }
+        savePlaylistToFile(action->text(), songToSave);
         status_bar->showMessage("Added...", 3000);
     }
 }
@@ -446,6 +449,8 @@ void Music_Player::set_style()
 
 void Music_Player::song_clicked(QTableWidgetItem *song_item)
 {
+    song_queue.clear();
+    queueIndex = 0;
     if(song_item->row() == total_songs)
     {
         if(by_next)
@@ -485,8 +490,17 @@ void Music_Player::set_song_name(QMediaContent con)
     QString pl_no = "Song No. " + QString::number(main_playlist->currentIndex() + 1) + " ,";
     current_playing_lbl->setText(pl_no);
     mediaInfo->currentMedia(con.canonicalResource());
+    //justNow = false;
 }
-
+/*
+void Music_Player::setSongLabelByQueue(const QMediaContent &con) const
+{
+    currrent_play_lbl->setText(con.canonicalUrl().fileName());
+    QString pl_no = "Song No. " + QString::number(main_playlist->currentIndex() + 1) + " ,";
+    current_playing_lbl->setText(pl_no);
+    mediaInfo->currentMedia(con.canonicalResource());
+}
+*/
 void Music_Player::create_action_and_control()
 {
     allSongs = new QAction("All Songs");
@@ -506,6 +520,12 @@ void Music_Player::create_action_and_control()
     refresh_action->setShortcut(tr("CTRL+R"));
     connect(refresh_action, SIGNAL(triggered()), this, SLOT(refresh_library()));
     player_menu->addAction(refresh_action);
+
+    timerAction = new QAction("Set Timer");
+    timerAction->setShortcut(tr("CTRL+T"));
+    timerAction->setIcon(QIcon(":player/icons/timer.png"));
+    connect(timerAction, SIGNAL(triggered()), this, SLOT(setTimeOut()));
+    player_menu->addAction(timerAction);
 
     exit_action = new QAction("Quit");
     exit_action->setIcon(QIcon(":player/icons/exit.png"));
@@ -570,6 +590,17 @@ void Music_Player::create_action_and_control()
     search_bar->setToolTip("Search songs");
     search_bar->setPlaceholderText("search");
     connect(search_bar, SIGNAL(textChanged(QString)), this, SLOT(search(QString)));
+}
+
+void Music_Player::setTimeOut()
+{
+    qDebug()<<"TIMER";
+    timer->exec();
+}
+
+void Music_Player::timeOut()
+{
+    exit_slot();
 }
 
 void Music_Player::addFolder()
@@ -713,9 +744,12 @@ void Music_Player::about_player()
     QMessageBox::about(this, "About", "<b>BAT-MUSIC-PLAYER V-1.0</b><br><br><br>"
                                       "This program is developed using c/c++(Qt Framework)"
                                       "anyone can use this program according to him/her."
-                                      "There is no copyright or anyother shit!!(i mean issue)"
-                                      "<br><a href='https://github.com/sandeepkumarmishra354/BAT-MUSIC-PLAYER'>"
-                                      "Source</a>"
+                                      "There is no copyright or anyother shit!!(i mean issue)."
+                                      "<br>For source code "
+                                      "<a href='https://github.com/sandeepkumarmishra354/BAT-MUSIC-PLAYER'>"
+                                      "click here</a><br>"
+                                      "Email: <a href='mailto:sandeepkumarmishra354@gmail.com'>"
+                                      "sandeepkumarmishra354@gmail.com</a>"
                                       "<br><br><br>"
                                       "<b>Happy Music</b>(A Batman Fan)");
 }
@@ -1143,7 +1177,7 @@ void Music_Player::exit_slot()
     close();
 }
 
-void Music_Player::savePlaylistToFile(const QString& playlistName, const QString& songWithPath)
+void Music_Player::savePlaylistToFile(const QString& playlistName, const QStringList& songList)
 {
     QString pl_file = playlistName + ".pl";
     QFile file(pl_file);
@@ -1152,9 +1186,8 @@ void Music_Player::savePlaylistToFile(const QString& playlistName, const QString
     QJsonObject obj;
     if(!file.exists())
     {
-        qDebug()<<songWithPath;
-        //qDebug()<<"NOT";
-        jArr.append(QJsonValue(songWithPath));
+        foreach(auto itm, songList)
+            jArr.append(QJsonValue(itm));
         obj["playlist_name"] = playlistName;
         obj["songs"] = jArr;
         QString JSONfile = QJsonDocument(obj).toJson(QJsonDocument::Indented);
@@ -1168,7 +1201,6 @@ void Music_Player::savePlaylistToFile(const QString& playlistName, const QString
     }
     else
     {
-        qDebug()<<songWithPath;
         QString JSONfile;
         if(file.open(QIODevice::ReadOnly))
         {
@@ -1178,9 +1210,9 @@ void Music_Player::savePlaylistToFile(const QString& playlistName, const QString
         jDoc = QJsonDocument::fromJson(JSONfile.toUtf8());
         obj = jDoc.object();
         jArr = obj["songs"].toArray();
-        jArr.append(QJsonValue(songWithPath));
+        foreach (auto itm, songList)
+            jArr.append(QJsonValue(itm));
         JSONfile = QJsonDocument(obj).toJson(QJsonDocument::Indented);
-        //qDebug()<<JSONfile;
         if(file.open(QIODevice::WriteOnly))
         {
             QTextStream out(&file);
@@ -1188,6 +1220,7 @@ void Music_Player::savePlaylistToFile(const QString& playlistName, const QString
             file.close();
         }
     }
+    //songToSave.clear();
 }
 
 void Music_Player::readPlaylistFromFile()
@@ -1255,10 +1288,28 @@ void Music_Player::keyPressEvent(QKeyEvent *event)
                 break;
         }
     }
+/*
     if(event->key() == Qt::Key_Escape)
         exit_slot();
     if(event->key() == Qt::Key_Space)
         play_or_pause();
+    if(event->key() == Qt::Key_Left)
+        prev_track();
+    if(event->key() == Qt::Key_Right)
+        next_track();
+*/
+}
+
+void Music_Player::keyReleaseEvent(QKeyEvent *event)
+{
+    if(event->key() == Qt::Key_Escape)
+        exit_slot();
+    if(event->key() == Qt::Key_Space)
+        play_or_pause();
+    if(event->key() == Qt::Key_Left)
+        prev_track();
+    if(event->key() == Qt::Key_Right)
+        next_track();
 }
 
 void Music_Player::closeEvent(QCloseEvent *event)
@@ -1354,5 +1405,6 @@ Music_Player::~Music_Player()
     delete about_qt;
     if(mediaInfo != nullptr)
         delete mediaInfo;
+    delete timer;
     delete fade_effect;
 }
