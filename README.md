@@ -1,4 +1,4 @@
-# BAT-MUSIC-PLAYER
+# BAT-MUSIC-PLAYER LINUX
 Simple music player program.
 features- repeat, shuffle, add queue, create playlist, delete/remove/search, display song info, set timer...
 
