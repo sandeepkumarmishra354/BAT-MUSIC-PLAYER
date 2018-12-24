@@ -10,4 +10,4 @@ Qt_5.6 or newer version must be installed in your target system before compiling
         
 # WOW !!! you got an executable file
 run this file
-        `./BAT_PLAYER
+        ``./BAT_PLAYER``
